@@ -1461,5 +1461,29 @@ algorithm
   end match;
 end haveSubs;
 
+public function prefixPrependString
+"Prepend a string to a prefix.
+  For qualified names, this means prepending a
+  string to the first identifier."
+  input String inString;
+  input Prefix.Prefix inPrefix;
+  output Prefix.Prefix outPrefix;
+algorithm
+  outPrefix := match (inString,inPrefix)
+    local
+      String s;
+      Prefix.ComponentPrefix compPre, outCompPre;
+      Prefix.ClassPrefix classPre;
+    case (s,Prefix.NOPRE())
+      then inPrefix;
+    case (s,Prefix.PREFIX(compPre as Prefix.NOCOMPPRE(), classPre))
+      then inPrefix;
+    case (s,Prefix.PREFIX(compPre as Prefix.PRE(), classPre))
+      algorithm
+        compPre.prefix := s + compPre.prefix;
+      then Prefix.PREFIX(compPre, classPre);
+  end match;
+end prefixPrependString;
+
 annotation(__OpenModelica_Interface="frontend");
 end PrefixUtil;
