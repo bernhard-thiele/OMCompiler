@@ -795,9 +795,9 @@ algorithm
   ConnectorElement.CONNECTOR_ELEMENT(name = name, ty = ty, source = src, dir = dir) := outerElement;
   name := ComponentReference.joinCrefs(innerCref, name);
   innerElement := findElement(name, innerFace, dir, ty, src, sets);
-  Connect.CONNECTOR_ELEMENT(name = name, ty = ty, source = src, dir = dir) := inOuterElement;
-  name := ComponentReference.joinCrefs(inInnerCref, name);
-  outInnerElement := findElement(name, inInnerFace, dir, ty, src, inSets);
+  Connect.CONNECTOR_ELEMENT(name = name, ty = ty, source = src, dir = dir) := outerElement;
+  name := ComponentReference.joinCrefs(innerCref, name);
+  innerElement := findElement(name, innerFace, dir, ty, src, sets);
 end findInnerElement;
 
 protected function optPrefixCref
@@ -1417,13 +1417,17 @@ protected
   Boolean has_stream, has_expandable, has_cardinality;
   ConnectionGraph.DaeEdges broken, connected;
   list<DAE.Element> dAElist;
+  list<Connect.ConnectorElement> elements;
+  DAE.ComponentRef name;
+  Absyn.Direction direction;
+  String directionStr;
 algorithm
   if not topScope then
     return;
   end if;
 
     print("ConnectUtil.equations: Start\n");
-    DAE.DAE(elementLst=dAElist) := inDae;
+    DAE.DAE(elementLst=dAElist) := DAE;
     print("ConnectUtil.equations: IN dAElist:\n"+DAEDump.dumpElementsStr(dAElist));
     print("ConnectUtil.equations: sets:\n");
     print(printSetsStr(sets) + "\n");
@@ -1439,7 +1443,7 @@ algorithm
   //print(stringDelimitList(List.map(sets, printSetStr), "\n") + "\n");
 
     print("ConnectUtil.equations: set_array:\n");
-    print(stringDelimitList(List.map(set_array, printSetStr), "\n") + "\n");
+    print(stringDelimitList(List.map(set_list, printSetStr), "\n") + "\n");
     for set in set_array loop
       Connect.SET(elements=elements) := set;
       for elem in elements loop
@@ -1765,11 +1769,6 @@ algorithm
     case (SOME(el as ConnectorElement.CONNECTOR_ELEMENT()), SOME(prefix_cr))
       algorithm
         el.name := ComponentReference.joinCrefs(prefix_cr, el.name);
-    case (SOME(Connect.CONNECTOR_ELEMENT(name, face, ty, src, set, dir)),
-        SOME(prefix), _)
-      equation
-        name = ComponentReference.joinCrefs(prefix, name);
-        el = Connect.CONNECTOR_ELEMENT(name, face, ty, src, set, dir);
       then
         setArrayUpdate(sets, el.set, el);
 

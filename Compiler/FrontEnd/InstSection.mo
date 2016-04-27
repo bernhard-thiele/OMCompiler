@@ -4186,8 +4186,8 @@ algorithm
         (cache,c2_1) = PrefixUtil.prefixCref(cache,env,ih,pre, c2);
 
         // Lookup direction (input/output/bidir)
-        (cache,DAE.ATTR(_,_,_,d1,_,_),_) = Lookup.lookupConnectorVar(cache,env,c1_1);
-        (cache,DAE.ATTR(_,_,_,d2,_,_),_) = Lookup.lookupConnectorVar(cache,env,c2_1);
+        (DAE.ATTR(_,_,_,d1,_,_),_,_,_) = Lookup.lookupConnectorVar(env,c1_1);
+        (DAE.ATTR(_,_,_,d2,_,_),_,_,_) = Lookup.lookupConnectorVar(env,c2_1);
 
         // set the source of this element
         source = ElementSource.createElementSource(info, FGraph.getScopePath(env), pre, (c1_1,c2_1));
@@ -4274,10 +4274,10 @@ algorithm
         (cache,c2p) = PrefixUtil.prefixCref(cache, env, ih, pre, c2);
 
         // Lookup direction (input/output/bidir)
-        (cache,DAE.ATTR(_,_,_,d1,_,_),_) = Lookup.lookupConnectorVar(cache,env,c1p);
-        (cache,DAE.ATTR(_,_,_,d2,_,_),_) = Lookup.lookupConnectorVar(cache,env,c2p);
+        (DAE.ATTR(_,_,_,d1,_,_),_,_,_) = Lookup.lookupConnectorVar(env,c1p);
+        (DAE.ATTR(_,_,_,d2,_,_),_,_,_) = Lookup.lookupConnectorVar(env,c2p);
 
-        source = DAEUtil.createElementSource(info, FGraph.getScopePath(env), PrefixUtil.prefixToCrefOpt(pre), SOME((c1p,c2p)), NONE());
+        source = ElementSource.createElementSource(info, FGraph.getScopePath(env), pre, (c1p,c2p));
 
         sets_1 = ConnectUtil.addArrayConnection(sets, c1, f1, d1, c2, f2, d2, source, ct);
       then

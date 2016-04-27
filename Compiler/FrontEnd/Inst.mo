@@ -612,7 +612,7 @@ algorithm
 
         //System.startTimer();
         //print("\nConnect equations and the OverConstrained graph in one step");
-        dae = ConnectUtil.equations(cache, env, ih, callscope_1, csets, dae1_1, graph, Absyn.pathString(Absyn.makeNotFullyQualified(fq_class)));
+        dae = ConnectUtil.equations(callscope_1, csets, dae1_1, graph, Absyn.pathString(Absyn.makeNotFullyQualified(fq_class)));
         //System.stopTimer();
         //print("\nConnect and Overconstrained: " + realString(System.getTimerIntervalTime()) + "\n");
         ty = InstUtil.mktype(fq_class, ci_state_1, tys, bc_ty, equalityConstraint, c);
