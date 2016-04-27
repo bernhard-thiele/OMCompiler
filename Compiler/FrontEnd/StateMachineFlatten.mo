@@ -137,7 +137,7 @@ algorithm
     // FIXME HACK3 traverse dae expressions for making substitutions sample(x, _) -> x (as long as clocked features are not fully supported in C runtime)
     (outDAElist, _, (_,nOfSubstitutions)) := DAEUtil.traverseDAE(outDAElist, FCore.getFunctionTree(cache), Expression.traverseSubexpressionsHelper, (traversingSubsXForSampleX, 0));
   end if;
-  //print("StateMachineFlatten.stateMachineToDataFlow: outDAElist:\n" + DAEDump.dumpStr(outDAElist,FCore.getFunctionTree(cache)));
+  print("StateMachineFlatten.stateMachineToDataFlow: outDAElist:\n" + DAEDump.dumpStr(outDAElist,FCore.getFunctionTree(cache)));
 end stateMachineToDataFlow;
 
 protected function traversingSubsActiveState "
@@ -694,6 +694,8 @@ algorithm
   // previous(a.x)
   previousExp := DAE.CALL(Absyn.IDENT("previous"), {DAE.CREF(inLHSCref, inLHSty)}, callAttributes);
 
+  print("StateMachineFlatten.createResetEquation: inLHSCref: " + ComponentReference.crefStr(inLHSCref) + "\n");
+  print("StateMachineFlatten.createResetEquation: crToExpOpt\n"); BaseHashTable.dumpHashTable(crToExpOpt);
   startValueOpt := BaseHashTable.get(inLHSCref, crToExpOpt);
   if isSome(startValueOpt) then
     startValueExp := Util.getOption(startValueOpt);
@@ -731,7 +733,6 @@ algorithm
 
   // a.x_previous = if a.active and (smOf.a.activeReset or smOf.fsm_of_a.activeResetStates[i] then x_start else previous(a.x)
   outEqn := DAE.EQUATION(lhsExp, ifExp, DAE.emptyElementSource);
-
 end createResetEquation;
 
 protected function wrapInStateActivationConditional "

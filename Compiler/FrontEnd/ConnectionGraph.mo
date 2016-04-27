@@ -1223,7 +1223,7 @@ algorithm
   end match;
 end printDaeEdges;
 
-protected function printConnectionGraph
+public function printConnectionGraph
   "Prints the content of ConnectionGraph structure."
   input ConnectionGraph inGraph;
 algorithm

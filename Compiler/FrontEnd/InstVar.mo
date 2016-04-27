@@ -91,15 +91,6 @@ public function instVar
   - lookup for inner in the instanance hieararchy if we have ONLY outer
   - instantiate normally via instVar_dispatch otherwise
   - report an error if we have modifications on outer
-
-BTH: Added cases that handles 'outer' and 'inner outer' variables differently if they
-are declared wihin an instance of a synchronous State Machine state: basically, instead of
-substituting 'outer' variables through their 'inner' counterparts the 'outer' variable is
-declared with a modification equation that sets the 'outer' variable equal to the 'inner'
-variable. Hence, the information in which instance an 'outer' variable was declared is
-preserved in the flattened code. This information is necessary to handle state machines in
-the backend. The current implementation doesn't handle cases in which the
-'inner' is not (yet) set.
   "
   input FCore.Cache inCache;
   input FCore.Graph inEnv;
@@ -258,15 +249,14 @@ algorithm
         // lookup in IH
         InnerOuter.INST_INNER(
            innerPrefix,
-           _,
-           _,
-           _,
-           _,
-           _,
-           SOME(InnerOuter.INST_RESULT(cache,compenv,store,_,_,ty,graph)),
-           _,_) =
+           nInner,
+           ioInner,
+           fullName,
+           typePath,
+           innerScope,
+           instResult as SOME(InnerOuter.INST_RESULT(cache,compenv,store,outerDAE,_,ty,graph)),
+           outers,_) =
           InnerOuter.lookupInnerVar(cache, env, ih, pre, n, io);
-
 
         // the outer must be in an instance that is part of a State Machine
         topInstance = listHead(ih);
@@ -275,8 +265,41 @@ algorithm
         cref = PrefixUtil.prefixToCref(inPrefix);
         true = BaseHashSet.has(cref, sm);
 
+
+//        // add outer prefix + component name and its corresponding inner prefix to the IH
+//        (cache,crefOuter) = PrefixUtil.prefixCref(cache,env,ih,pre, ComponentReference.makeCrefIdent(n, DAE.T_UNKNOWN_DEFAULT, {}));
+//        (cache,crefInner) = PrefixUtil.prefixCref(cache,env,ih,innerPrefix, ComponentReference.makeCrefIdent(n, DAE.T_UNKNOWN_DEFAULT, {}));
+//        ih = InnerOuter.addOuterPrefixToIH(ih, crefOuter, crefInner);
+//        outers = List.unionElt(crefOuter, outers);
+//        // update the inner with the outer for easy reference
+//        ih = InnerOuter.updateInstHierarchy(ih, innerPrefix, ioInner,
+//               InnerOuter.INST_INNER(
+//                  innerPrefix, // prefix
+//                  nInner, // component name,
+//                  ioInner, // inner outer attributes
+//                  fullName, // full component name
+//                  typePath, // fully qual type path
+//                  innerScope, // the scope,
+//                  instResult,
+//                  outers, // outers connected to this inner
+//                  NONE()
+//                  ));
+
+
+        // create equation modification to outer that sets it equal to inner
+        (cache,crefInner) = PrefixUtil.prefixCref(cache,env,ih,innerPrefix, ComponentReference.makeCrefIdent(n, DAE.T_UNKNOWN_DEFAULT, {}));
+        crefExp = Expression.makeCrefExp(crefInner,ty);
+        aexp = Expression.unelabExp(crefExp);
+        mod = DAE.MOD(SCode.NOT_FINAL(), SCode.NOT_EACH(), {},
+          SOME(DAE.TYPED(crefExp, NONE(), DAE.PROP(ty, DAE.C_VAR()),aexp)), info);
+        // Instantiate outer variable
         (cache,compenv,ih,store,dae,csets,ty,graph) =
-          instVar_dispatch(cache,env,ih,store,ci_state,mod,pre,n,cl,attr,pf,dims,idxs,inst_dims,impl,comment,info,graph,csets);
+           instVar_dispatch(cache,env,ih,store,ci_state,mod,pre,n,cl,attr,pf,dims,idxs,inst_dims,impl,comment,info,graph,csets);
+
+//        // Instantiate auxiliary variable
+//        (cache,compenv,ih,store,dae,csets,ty,graph) =
+//          //instVar_dispatch(cache,env,ih,store,ci_state,mod,PrefixUtil.prefixPrependString("$",pre),n,cl,attr,pf,dims,idxs,inst_dims,impl,comment,info,graph,csets);
+//          instVar_dispatch(cache,env,ih,store,ci_state,mod,pre,n,cl,attr,pf,dims,idxs,inst_dims,impl,comment,info,graph,csets);
       then
         (inCache,compenv,ih,store,dae,csets,ty,graph);
 

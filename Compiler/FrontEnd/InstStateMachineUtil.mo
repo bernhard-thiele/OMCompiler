@@ -53,6 +53,8 @@ protected import InnerOuter;
 protected import Expression;
 protected import Debug;
 protected import PrefixUtil;
+protected import Connect;
+protected import ConnectUtil;
 protected import DAEDump;
 
 public uniontype SMNode
@@ -152,15 +154,20 @@ Wrap state machine components into corresponding flat state machine containers.
   input InnerOuter.InstHierarchy inIH;
   input DAE.DAElist inDae1;
   input DAE.DAElist inDae2;
+  input Connect.Sets inSets;
   input SMNodeToFlatSMGroupTable smNodeToFlatSMGroup;
   input list<DAE.ComponentRef> smInitialCrefs "every smInitialCrefs corresponds to a flat state machine group";
   output DAE.DAElist outDae1;
   output DAE.DAElist outDae2;
+  output Connect.Sets outSets "updated connection set with merged connections to multiple outputs";
 protected
-  list<DAE.Element> elementLst1, elementLst2, smCompsLst, otherLst1, otherLst2, smTransitionsLst, flatSmLst, flatSMsAndMergingEqns;
+  list<DAE.Element> connectFreshDeclAndEqsLst, elementLst1, elementLst2, smCompsLst, otherLst1, otherLst2, smTransitionsLst, flatSmLst, flatSMsAndMergingEqns;
 algorithm
   //print("InstStateMachineUtil.wrapSMCompsInFlatSMs: smInitialCrefs: " + stringDelimitList(List.map(smInitialCrefs, ComponentReference.crefStr), ",") + "\n");
   //print("InstStateMachineUtil.wrapSMCompsInFlatSMs: smNodeToFlatSMGroup:\n"); BaseHashTable.dumpHashTable(smNodeToFlatSMGroup);
+
+  //  Merging connections to multiple outputs
+  (outSets, connectFreshDeclAndEqsLst) := mergeConnectionsToMultipleOutputs(inIH, inSets);
 
   DAE.DAE(elementLst=elementLst1) := inDae1;
   // extract SM_COMPs
@@ -171,7 +178,6 @@ algorithm
   (smTransitionsLst, otherLst2) := List.extractOnTrue(elementLst2, isSMStatement2);
 
   // Create list of FLAT_SM(..). Every FLAT_SM contains the components that constitute that flat state machine
-  //flatSmLst := List.map2(smInitialCrefs, createFlatSM, smCompsLst, smNodeToFlatSMGroup);
   flatSmLst := List.map2(smInitialCrefs, createFlatSM, listAppend(smCompsLst, smTransitionsLst), smNodeToFlatSMGroup);
   // Merge variable definitions in flat state machine and create elements list containing FLAT_SMs and merging equations
   flatSMsAndMergingEqns := List.fold1(flatSmLst, mergeVariableDefinitions, inIH, {});
@@ -180,7 +186,175 @@ algorithm
   outDae2 := DAE.DAE(otherLst2);
 end wrapSMCompsInFlatSMs;
 
+protected function mergeConnectionsToMultipleOutputs "
+Author: BTH
+Create fresh variables and fresh equations for blabla
+"
+  input InnerOuter.InstHierarchy inIH;
+  input Connect.Sets inSets;
+  output Connect.Sets outSets = inSets;
+  output list<DAE.Element> outDaeElems;
+protected
+  list<Connect.Set> sets;
+  array<Connect.Set> set_array;
 
+  Connect.ConnectorType cty;
+  list<Connect.ConnectorElement> elements, equElems, otherElems1, smOutElems, otherElems2;
+  list<list<Connect.ConnectorElement>> smOutElemsLstAcc = {};
+
+  list<DAE.Type> tyLst;
+  DAE.Type ty;
+
+
+  list<DAE.ComponentRef> crefLst, flattenedCrefLst;
+  list<array<DAE.ComponentRef>> explodedCrefLst;
+  list<list<DAE.ComponentRef>> lastTwoCrefLst;
+  list<String> explodedFreshVarStr;
+
+  String freshVarStr;
+  DAE.ComponentRef preRef, freshVarRef;
+  DAE.Element freshVar, freshMergingEqn;
+
+  DAE.ComponentRef cref;
+  list<DAE.Element> elementLstAcc = {};
+algorithm
+  set_array := ConnectUtil.generateSetArray(inSets);
+  sets := arrayList(set_array);
+
+  //print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: inSets: " + ConnectUtil.printSetsStr(inSets) + "\n");
+  //print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: sets:\n");
+  //print(stringDelimitList(List.map(sets, ConnectUtil.printSetStr), "\n") + "\n");
+
+  for set in sets loop
+    // FIXME: Also handle SET_POINTER
+    Connect.SET(ty=cty, elements=elements) := set;
+    // FIXME: Unify next two checks?
+    (equElems, otherElems1) := List.extractOnTrue(elements, isEquConnection);
+    // FIXME: Sanity checks needed that smOutElems are part of the same flat state machine and not part of the same state component
+    (smOutElems, otherElems2) := List.extract1OnTrue(equElems, isSMOutputConnection, inIH);
+
+    //smOutElemsLstAcc := if listEmpty(smOutElems) then smOutElemsLstAcc else smOutElems :: smOutElemsLstAcc;
+    smOutElemsLstAcc := smOutElems :: smOutElemsLstAcc;
+  end for;
+
+  for smOutElemsLst in List.filter(smOutElemsLstAcc, listHead) loop // only nonempty lists
+    // FIXME Using assumption that all elements in smOutElemsLst are part of the same flat State Machine.
+    // Should maybe move this code after/to "Create list of FLAT_SM(..)" in function "wrapSMCompsInFlatSMs"
+    //Connect.CONNECTOR_ELEMENT(name=cref) := listHead(smOutElemsLst);
+    crefLst := List.map(smOutElemsLst, ConnectUtil.getElementName);
+    print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: crefLst: " + stringDelimitList(List.map(crefLst, ComponentReference.crefStr), ",") + "\n");
+
+    // FIXME check type compatibility and give error messages
+    tyLst := List.map(crefLst, ComponentReference.crefTypeFull);
+    ty := listHead(tyLst);
+
+    // == Create fresh variable name using the pattern {a.state1.x, a.state2.y} -> a.$state1$x$state2$y ==
+    explodedCrefLst := list(listArray(ComponentReference.explode(x)) for x in crefLst);
+    lastTwoCrefLst := list({arrayGet(x,arrayLength(x)-1), arrayGet(x,arrayLength(x))} for x in explodedCrefLst);
+    flattenedCrefLst := List.flatten(lastTwoCrefLst);
+    explodedFreshVarStr := List.map(flattenedCrefLst, ComponentReference.crefStr);
+    freshVarStr := "$" + stringDelimitList(explodedFreshVarStr, "$");
+    print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: freshVarStr: " + freshVarStr + "\n");
+    // determine prefix if state instance is not already at top level, e.g., pre.state1.x -> pre
+    try
+      preRef := ComponentReference.crefStripLastIdent(ComponentReference.crefStripLastIdent(listHead(crefLst)));
+      freshVarRef := ComponentReference.joinCrefs(preRef,DAE.CREF_IDENT(freshVarStr, ty, {}));
+    else
+      freshVarRef := DAE.CREF_IDENT(freshVarStr, ty, {});
+    end try;
+    print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: freshVarRef: " + ComponentReference.crefStr(freshVarRef) + "\n");
+    // TODO write Modelica ticket about undefined IC problem, cf. SMTestCases.CDF_UndefinedIC
+    freshVar := DAE.VAR(freshVarRef, DAE.VARIABLE() /* FIXME use DAE.DISCRETE? */, DAE.OUTPUT(), DAE.NON_PARALLEL(),
+      DAE.PUBLIC(), ty, NONE(), {} /* dims FIXME: Need to support non-scalars, too? How would one figure out the needed size? */,
+    DAE.POTENTIAL(), DAE.emptyElementSource, NONE() /* VariableAttributes */, NONE(), Absyn.NOT_INNER_OUTER());
+
+    // Create fresh equation merging the state machine outputs
+    // v = if active(state1) then state1.y1 else if active(state2) then state2.y2 ... else previous(v)
+    freshMergingEqn :=  DAE.EQUATION(DAE.CREF(freshVarRef, ty), mergingRhs(crefLst, freshVarRef, ty), DAE.emptyElementSource);
+
+    elementLstAcc := freshMergingEqn :: freshVar :: elementLstAcc;
+
+    // TODO: Need other "otherElems1" corresponding to smOutElemsLst
+    outSets := removeMergedConnectorsByFreshVar(inSets, smOutElemsLst, otherElemsLst, freshVar);
+  end for;
+  elementLstAcc := listReverse(elementLstAcc);
+
+  // FIXME
+  outDaeElems := {};
+end mergeConnectionsToMultipleOutputs;
+
+
+function removeMergedConnectorsByFreshVar "
+Author: BTH
+Remove the inSMOutElemsLst elements from the connector set and replace it by a fresh merged variable.
+Helper function to mergeConnectionsToMultipleOutputs.
+"
+  input Connect.Sets inSets;
+  input list<Connect.ConnectorElement> inSmOutElemsLst;
+  input list<Connect.ConnectorElement> inOtherElemsLst "TODO need the non outputs that are part of the set";
+  input DAE.Element inFreshVar;
+  output Connect.Sets OutSets = inSets;
+algorithm
+
+TODO
+
+// idea
+map(inSmOutElemsLst, ConnectUtil.addDeletedComponent);
+for x in inOtherElemsLst loop
+  cref := getCref(x);
+  outSets := ConnectUtil.addConnection(inFreshVarCref, cref, bla);
+end for;
+
+// ConnectUtil.addDeletedComponent
+// addConnection
+// newElement
+
+end removeMergedConnectorsByFreshVar;
+
+
+protected function isSMOutputConnection "
+Author: BTH
+Check if connector element is in an instance that is part of a State Machine.
+"
+  input Connect.ConnectorElement inElement;
+  input InnerOuter.InstHierarchy inIH;
+  output Boolean outResult;
+algorithm
+  outResult := match (inElement)
+    local
+      DAE.ComponentRef name;
+      Boolean result;
+      InnerOuter.TopInstance topInstance;
+      HashSet.HashSet sm;
+      DAE.ComponentRef strippedCref;
+    case Connect.CONNECTOR_ELEMENT(name=name, dir=Absyn.OUTPUT()) guard ComponentReference.crefDepth(name) >= 2
+      algorithm
+        // get cref of instance which contains "name"
+        strippedCref := ComponentReference.crefStripLastIdent(name);
+        topInstance := listHead(inIH);
+        InnerOuter.TOP_INSTANCE(sm=sm) := topInstance;
+        result := BaseHashSet.has(strippedCref, sm);
+      then result;
+    else false;
+  end match;
+end isSMOutputConnection;
+
+protected function isEquConnection "
+Author: BTH
+Check if connector element has the type Connect.EQU (equality).
+FIXME Move function into ConnectUtil package?
+"
+  input Connect.ConnectorElement inElement;
+  output Boolean outResult;
+algorithm
+  outResult := match (inElement)
+    case Connect.CONNECTOR_ELEMENT(ty=Connect.EQU()) then true;
+    else false;
+  end match;
+end isEquConnection;
+
+
+/////////////////////////////////////////////////////////
 
 protected function mergeVariableDefinitions "
 Author: BTH
@@ -211,7 +385,7 @@ algorithm
 
   // Create table that maps outer outputs to corresponding state
   outerOutputCrefToSMCompCref := List.fold(dAElist, collectOuterOutputs, HashTableCG.emptyHashTable());
-  // print("InstStateMachineUtil.mergeVariableDefinitions OuterToSTATE:\n"); BaseHashTable.dumpHashTable(outerOutputCrefToSMCompCref);
+  print("InstStateMachineUtil.mergeVariableDefinitions OuterToSTATE:\n"); BaseHashTable.dumpHashTable(outerOutputCrefToSMCompCref);
 
   // Create table that maps outer outputs crefs to corresponding inner crefs
   outerOutputCrefToInnerCref := List.fold1(BaseHashTable.hashTableKeyList(outerOutputCrefToSMCompCref), matchOuterWithInner, inIH, HashTableCG.emptyHashTable());
@@ -225,8 +399,15 @@ algorithm
   // print("InstStateMachineUtil.mergeVariableDefinitions: innerCrefToOuterOutputCrefs:\n"); BaseHashTable.dumpHashTable(innerCrefToOuterOutputCrefs);
 
   // Substitute occurrences of previous(outerCref) by previous(innerCref)
+  //print("InstStateMachineUtil.mergeVariableDefinitions: dAElist BEFORE Substitute:\n" + DAEDump.dumpElementsStr(dAElist));
   emptyTree := DAE.AvlTreePathFunction.Tree.EMPTY();
   (DAE.DAE(dAElist), _, _) := DAEUtil.traverseDAE(DAE.DAE(dAElist), emptyTree, traverserHelperSubsOuterByInnerExp, outerOutputCrefToInnerCref);
+  //print("InstStateMachineUtil.mergeVariableDefinitions: dAElist AFTER Substitute:\n" + DAEDump.dumpElementsStr(dAElist));
+
+  // Substitute occurrences of innerCref by outerCref except for expressions previous(innerCref)
+  // STUPID!?
+  // emptyTree := DAE.AVLTREENODE(NONE(),0,NONE(),NONE());
+  // (DAE.DAE(dAElist), _, _) := DAEUtil.traverseDAE(DAE.DAE(dAElist), emptyTree, traverserHelperSubsInnerByOuterExp, outerOutputCrefToInnerCref);
 
   if Flags.getConfigBool(Flags.CT_STATE_MACHINES) then
 	  // == HACK Let's deal with continuous-time ==
@@ -404,17 +585,17 @@ end freshMergingEqn;
 
 protected function mergingRhs "
 Author: BTH
-Helper function to freshMergingEqn.
+Helper function to freshMergingEqn and mergeConnectionsToMultipleOutputs.
 Create RHS expression of merging equation.
 "
-  input List<DAE.ComponentRef> inOuterCrefs "List of the crefs of the outer variables";
-  input DAE.ComponentRef inInnerCref;
-  input DAE.Type ty "type of inner cref (inner cref type expected to the same as outer crefs type)";
+  input List<DAE.ComponentRef> inRhsCrefs "List of the RHS crefs to be merged";
+  input DAE.ComponentRef inLhsCref;
+  input DAE.Type ty "type of LHS cref (expected to be the same as rhs crefs type)";
   output DAE.Exp res;
 protected
   DAE.CallAttributes callAttributes = DAE.CALL_ATTR(ty,false,true,false,false,DAE.NO_INLINE(),DAE.NO_TAIL());
 algorithm
-  res := match (inOuterCrefs)
+  res := match (inRhsCrefs)
     local
       DAE.ComponentRef outerCref, crefState;
       List<DAE.ComponentRef> rest;
@@ -422,7 +603,7 @@ algorithm
     case (outerCref::{})
       equation
         outerCrefExp = DAE.CREF(outerCref, ty);
-        innerCrefExp = DAE.CREF(inInnerCref, ty);
+        innerCrefExp = DAE.CREF(inLhsCref, ty);
         crefState = ComponentReference.crefStripLastIdent(outerCref);
         crefStateExp = DAE.CREF(crefState, ty);
         expCond = DAE.CALL(Absyn.IDENT("activeState"), {crefStateExp}, callAttributes);
@@ -435,7 +616,7 @@ algorithm
         crefState = ComponentReference.crefStripLastIdent(outerCref);
         crefStateExp = DAE.CREF(crefState, ty);
         expCond = DAE.CALL(Absyn.IDENT("activeState"), {crefStateExp}, callAttributes);
-        expElse = mergingRhs(rest, inInnerCref, ty);
+        expElse = mergingRhs(rest, inLhsCref, ty);
         ifExp = DAE.IFEXP(expCond, outerCrefExp, expElse);
       then ifExp;
   end match;
@@ -505,6 +686,42 @@ algorithm
   end match;
 end traverserHelperSubsOuterByInner;
 
+protected function traverserHelperSubsInnerByOuterExp "
+Author: BTH
+Substitute inner variables x by outer variables a.x except x is argument of 'previous(x)'.
+Helper function to mergeVariableDefinitions"
+  input DAE.Exp inExp;
+  input HashTableCG.HashTable inInnerToOuter;
+  output DAE.Exp outExp;
+  output HashTableCG.HashTable outInnerToOuter;
+algorithm
+  (outExp, outInnerToOuter) := Expression.traverseExpBottomUp(inExp, traverserHelperSubsInnerByOuter, inInnerToOuter);
+end traverserHelperSubsInnerByOuterExp;
+
+protected function traverserHelperSubsInnerByOuter "
+Author: BTH
+Helper function to traverserHelperSubsInnerByOuterExp"
+  input DAE.Exp inExp;
+  input HashTableCG.HashTable inInnerToOuter;
+  output DAE.Exp outExp;
+  output HashTableCG.HashTable outInnerToOuter;
+algorithm
+  (outExp,outInnerToOuter) := match inExp
+    local
+      DAE.ComponentRef componentRef;
+      DAE.Type ty;
+      DAE.CallAttributes attr;
+      DAE.Exp e;
+    // Substitute inner variables x by outer variables a.x except x is argument of 'previous(x)':
+    case e as DAE.CALL(Absyn.IDENT("previous"), _, _)
+      then (e,inInnerToOuter);
+    case DAE.CREF(componentRef, ty)
+      guard BaseHashTable.hasKey(componentRef, inInnerToOuter) then
+        (DAE.CREF(BaseHashTable.get(componentRef, inInnerToOuter), ty),inInnerToOuter);
+    else (inExp,inInnerToOuter);
+  end match;
+end traverserHelperSubsInnerByOuter;
+
 protected function matchOuterWithInner "
 Author: BTH
 Helper function to mergeVariableDefinitions
@@ -518,8 +735,9 @@ protected
 algorithm
   crefIdent := ComponentReference.crefLastCref(inOuterCref);
 
-  // inOuterCref is supposed to be "outer" or "inner outer" and we want to move one level up the instance hierachy for starting the search for the corresponding inner
+  // inOuterCref is supposed to be "outer" or "inner outer" and we want to move one level up the instance hierarchy for starting the search for the corresponding inner
   strippedCref1 := ComponentReference.crefStripLastIdent(inOuterCref);
+
   // Go up one instance level, append identifier and try again. If already at top level, try to find identifier at top level
   strippedCref2 := if ComponentReference.crefDepth(strippedCref1) >= 2 then
     ComponentReference.joinCrefs( ComponentReference.crefStripLastIdent(strippedCref1), crefIdent)

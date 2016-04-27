@@ -612,7 +612,7 @@ algorithm
 
         //System.startTimer();
         //print("\nConnect equations and the OverConstrained graph in one step");
-        dae = ConnectUtil.equations(callscope_1, csets, dae1_1, graph, Absyn.pathString(Absyn.makeNotFullyQualified(fq_class)));
+        dae = ConnectUtil.equations(cache, env, ih, callscope_1, csets, dae1_1, graph, Absyn.pathString(Absyn.makeNotFullyQualified(fq_class)));
         //System.stopTimer();
         //print("\nConnect and Overconstrained: " + realString(System.getTimerIntervalTime()) + "\n");
         ty = InstUtil.mktype(fq_class, ci_state_1, tys, bc_ty, equalityConstraint, c);
@@ -2137,7 +2137,7 @@ algorithm
         // BTH: Relate state machine components to the flat state machine that they are part of
         smCompToFlatSM = InstStateMachineUtil.createSMNodeToFlatSMGroupTable(dae2);
         // BTH: Wrap state machine components (including transition statements) into corresponding flat state machine containers
-        (dae1,dae2) = InstStateMachineUtil.wrapSMCompsInFlatSMs(ih, dae1, dae2, smCompToFlatSM, smInitialCrefs);
+        (dae1,dae2,csets5) = InstStateMachineUtil.wrapSMCompsInFlatSMs(ih, dae1, dae2, csets5, smCompToFlatSM, smInitialCrefs);
 
         //Collect the DAE's
         dae = DAEUtil.joinDaeLst({dae1,dae2,dae3,dae4,dae5,dae6,dae7});

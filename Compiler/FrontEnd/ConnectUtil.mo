@@ -74,6 +74,8 @@ import PrefixUtil;
 import System;
 import Types;
 import Util;
+import InstSection;
+import DAEDump;
 
 // Import some types from Connect.
 import Connect.Face;
@@ -181,8 +183,10 @@ public function addConnection
   input output Sets sets;
   input DAE.ComponentRef cref1;
   input Face face1;
+  input Absyn.Direction dir1;
   input DAE.ComponentRef cref2;
   input Face face2;
+  input Absyn.Direction dir2;
   input SCode.ConnectorType connectorType;
   input DAE.ElementSource source;
 protected
@@ -190,8 +194,8 @@ protected
   ConnectorType ty;
 algorithm
   ty := makeConnectorType(connectorType);
-  e1 := findElement(cref1, face1, ty, source, sets);
-  e2 := findElement(cref2, face2, ty, source, sets);
+  e1 := findElement(cref1, face1, dir1, ty, source, sets);
+  e2 := findElement(cref2, face2, dir2, ty, source, sets);
   sets := mergeSets(e1, e2, sets);
 end addConnection;
 
@@ -219,8 +223,10 @@ public function addArrayConnection
   input output Sets sets;
   input DAE.ComponentRef cref1;
   input Face face1;
+  input Absyn.Direction dir1;
   input DAE.ComponentRef cref2;
   input Face face2;
+  input Absyn.Direction dir2;
   input DAE.ElementSource source;
   input SCode.ConnectorType connectorType;
 protected
@@ -232,7 +238,7 @@ algorithm
 
   for cr1 in crefs1 loop
     cr2 :: crefs2 := crefs2;
-    sets := addConnection(sets, cr1, face1, cr2, face2, connectorType, source);
+    sets := addConnection(sets, cr1, face1, dir1, cr2, face2, dir2, connectorType, source);
   end for;
 end addArrayConnection;
 
@@ -571,7 +577,7 @@ algorithm
   else
     // Otherwise, add a new set for it.
     sets.setCount := sets.setCount + 1;
-    e := newElement(cref, Face.INSIDE(), ConnectorType.FLOW(), source, sets.setCount);
+    e := newElement(cref, Face.INSIDE(), Absyn.BIDIR(), ConnectorType.FLOW(), source, sets.setCount);
     sets.sets := setTrieAdd(e, sets.sets);
   end try;
 end addInsideFlowVariable;
@@ -784,10 +790,14 @@ protected
   DAE.ComponentRef name;
   ConnectorType ty;
   DAE.ElementSource src;
+  Absyn.Direction dir;
 algorithm
-  ConnectorElement.CONNECTOR_ELEMENT(name = name, ty = ty, source = src) := outerElement;
+  ConnectorElement.CONNECTOR_ELEMENT(name = name, ty = ty, source = src, dir = dir) := outerElement;
   name := ComponentReference.joinCrefs(innerCref, name);
-  innerElement := findElement(name, innerFace, ty, src, sets);
+  innerElement := findElement(name, innerFace, dir, ty, src, sets);
+  Connect.CONNECTOR_ELEMENT(name = name, ty = ty, source = src, dir = dir) := inOuterElement;
+  name := ComponentReference.joinCrefs(inInnerCref, name);
+  outInnerElement := findElement(name, inInnerFace, dir, ty, src, inSets);
 end findInnerElement;
 
 protected function optPrefixCref
@@ -810,6 +820,7 @@ protected function findElement
    element can be found it creates a new one."
   input DAE.ComponentRef cref;
   input Face face;
+  input Absyn.Direction dir;
   input ConnectorType ty;
   input DAE.ElementSource source;
   input Sets sets;
@@ -818,7 +829,7 @@ algorithm
   try
     element := setTrieGetElement(cref, face, sets.sets);
   else
-    element := newElement(cref, face, ty, source, Connect.NEW_SET);
+    element := newElement(cref, face, dir, ty, source, Connect.NEW_SET);
   end try;
 end findElement;
 
@@ -826,12 +837,13 @@ protected function newElement
   "Creates a new connector element."
   input DAE.ComponentRef cref;
   input Face face;
+  input Absyn.Direction dir;
   input ConnectorType ty;
   input DAE.ElementSource source;
   input Integer set;
   output ConnectorElement element;
 algorithm
-  element := ConnectorElement.CONNECTOR_ELEMENT(cref, face, ty, source, set);
+  element := ConnectorElement.CONNECTOR_ELEMENT(cref, face, ty, source, set, dir);
 end newElement;
 
 protected function isNewElement
@@ -861,7 +873,7 @@ algorithm
   element.set := index;
 end setElementSetIndex;
 
-protected function getElementName
+public function getElementName
   "Returns the name of a connector element."
   input ConnectorElement element;
   output DAE.ComponentRef name;
@@ -1404,16 +1416,43 @@ protected
   DAE.DAElist dae, dae2;
   Boolean has_stream, has_expandable, has_cardinality;
   ConnectionGraph.DaeEdges broken, connected;
+  list<DAE.Element> dAElist;
 algorithm
   if not topScope then
     return;
   end if;
 
-  //print(printSetsStr(inSets) + "\n");
+    print("ConnectUtil.equations: Start\n");
+    DAE.DAE(elementLst=dAElist) := inDae;
+    print("ConnectUtil.equations: IN dAElist:\n"+DAEDump.dumpElementsStr(dAElist));
+    print("ConnectUtil.equations: sets:\n");
+    print(printSetsStr(sets) + "\n");
+
+    // Do my stuff here
+    //(_, attr, _) = Lookup.lookupConnectorVar(inCache, inEnv, CR);
+    // (dae, sets) = asdf(sets)
+
+  //print(printSetsStr(sets) + "\n");
   set_array := generateSetArray(sets);
   set_list := arrayList(set_array);
   //print("Sets:\n");
   //print(stringDelimitList(List.map(sets, printSetStr), "\n") + "\n");
+
+    print("ConnectUtil.equations: set_array:\n");
+    print(stringDelimitList(List.map(set_array, printSetStr), "\n") + "\n");
+    for set in set_array loop
+      Connect.SET(elements=elements) := set;
+      for elem in elements loop
+        Connect.CONNECTOR_ELEMENT(name=name,dir=direction) := elem;
+
+        directionStr := match direction
+          case Absyn.INPUT() then "input";
+          case Absyn.OUTPUT() then "output";
+          else "bidir";
+        end match;
+        print("ConnectUtil.equations: name -> dir: " + ComponentReference.crefStr(name) + " -> " + directionStr + "\n");
+      end for;
+    end for;
 
   if daeHasExpandableConnectors(DAE) then
     (set_list, dae) := removeUnusedExpandableVariablesAndConnections(set_list, DAE);
@@ -1423,16 +1462,22 @@ algorithm
 
   // send in the connection graph and build the connected/broken connects
   // we do this here so we do it once and not for every EQU set.
+    print("ConnectUtil.equations: connectionGraph:\n"); ConnectionGraph.printConnectionGraph(connectionGraph);
   (dae, connected, broken) := ConnectionGraph.handleOverconstrainedConnections(
     connectionGraph, modelNameQualified, dae);
 
   // adrpo: FIXME: maybe we should just remove them from the sets then send the
   // updates sets further
   dae2 := equationsDispatch(listReverse(set_list), connected, broken);
+    DAE.DAE(elementLst=dAElist) := dae2;
+    print("ConnectUtil.equations: dae2 dAElist:\n"+DAEDump.dumpElementsStr(dAElist));
   DAE := DAEUtil.joinDaes(dae, dae2);
   DAE := evaluateConnectionOperators(sets, set_array, DAE);
   // add the equality constraint equations to the dae.
   DAE := ConnectionGraph.addBrokenEqualityConstraintEquations(DAE, broken);
+    DAE.DAE(elementLst=dAElist) := DAE;
+    print("ConnectUtil.equations: OUT DAE:\n"+DAEDump.dumpElementsStr(dAElist));
+    print("ConnectUtil.equations: End\n");
 end equations;
 
 protected function getExpandableEquSetsAsCrefs
@@ -1544,7 +1589,7 @@ algorithm
   allAreExpandable := true;
 end allCrefsAreExpandable;
 
-protected function generateSetArray
+public function generateSetArray
   "Generates an array of sets from a connection set."
   input Sets sets;
   output array<Set> setArray;
@@ -1720,6 +1765,11 @@ algorithm
     case (SOME(el as ConnectorElement.CONNECTOR_ELEMENT()), SOME(prefix_cr))
       algorithm
         el.name := ComponentReference.joinCrefs(prefix_cr, el.name);
+    case (SOME(Connect.CONNECTOR_ELEMENT(name, face, ty, src, set, dir)),
+        SOME(prefix), _)
+      equation
+        name = ComponentReference.joinCrefs(prefix, name);
+        el = Connect.CONNECTOR_ELEMENT(name, face, ty, src, set, dir);
       then
         setArrayUpdate(sets, el.set, el);
 
@@ -2439,7 +2489,8 @@ protected
   Integer set;
 algorithm
   try
-    e := findElement(streamCref, Face.INSIDE(), ConnectorType.STREAM(NONE()),
+    // FIXME BTH does it make sense to pass in BIDIR()?
+    e := findElement(streamCref, Face.INSIDE(), Absyn.BIDIR(), ConnectorType.STREAM(NONE()),
       DAE.emptyElementSource, sets);
 
     if isNewElement(e) then
@@ -3137,7 +3188,7 @@ algorithm
   string := "\t" + String(set1) + " connected to " + intString(set2) + "\n";
 end printSetConnection;
 
-protected function printSetStr
+public function printSetStr
   "Prints a Set to a String."
   input Set set;
   output String string;

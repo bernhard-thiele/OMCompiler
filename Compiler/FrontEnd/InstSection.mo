@@ -4117,6 +4117,8 @@ algorithm
       list<DAE.ComponentRef> crefs1, crefs2;
       DAE.Const const1,const2;
       list<DAE.Exp> lhsl, rhsl;
+      Absyn.Direction d1, d2;
+      String dirStr;
 
     // connections to outer components
     case(cache,env,ih,sets,pre,c1,f1,_,_,c2,f2,_,_,ct,_,_,graph,_)
@@ -4183,10 +4185,14 @@ algorithm
         (cache,c1_1) = PrefixUtil.prefixCref(cache,env,ih,pre, c1);
         (cache,c2_1) = PrefixUtil.prefixCref(cache,env,ih,pre, c2);
 
+        // Lookup direction (input/output/bidir)
+        (cache,DAE.ATTR(_,_,_,d1,_,_),_) = Lookup.lookupConnectorVar(cache,env,c1_1);
+        (cache,DAE.ATTR(_,_,_,d2,_,_),_) = Lookup.lookupConnectorVar(cache,env,c2_1);
+
         // set the source of this element
         source = ElementSource.createElementSource(info, FGraph.getScopePath(env), pre, (c1_1,c2_1));
 
-        sets_1 = ConnectUtil.addConnection(sets, c1, f1, c2, f2, inConnectorType, source);
+        sets_1 = ConnectUtil.addConnection(sets, c1, f1, d1, c2, f2, d2, inConnectorType, source);
       then
         (cache,env,ih,sets_1,DAE.emptyDae,graph);
 
@@ -4266,9 +4272,14 @@ algorithm
         // set the source of this element
         (cache,c1p) = PrefixUtil.prefixCref(cache, env, ih, pre, c1);
         (cache,c2p) = PrefixUtil.prefixCref(cache, env, ih, pre, c2);
-        source = ElementSource.createElementSource(info, FGraph.getScopePath(env), pre, (c1p,c2p));
 
-        sets_1 = ConnectUtil.addArrayConnection(sets, c1, f1, c2, f2, source, ct);
+        // Lookup direction (input/output/bidir)
+        (cache,DAE.ATTR(_,_,_,d1,_,_),_) = Lookup.lookupConnectorVar(cache,env,c1p);
+        (cache,DAE.ATTR(_,_,_,d2,_,_),_) = Lookup.lookupConnectorVar(cache,env,c2p);
+
+        source = DAEUtil.createElementSource(info, FGraph.getScopePath(env), PrefixUtil.prefixToCrefOpt(pre), SOME((c1p,c2p)), NONE());
+
+        sets_1 = ConnectUtil.addArrayConnection(sets, c1, f1, d1, c2, f2, d2, source, ct);
       then
         (cache,env,ih,sets_1,DAE.emptyDae,graph);
 

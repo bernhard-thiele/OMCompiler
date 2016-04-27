@@ -92,6 +92,7 @@ public uniontype ConnectorElement
     ConnectorType ty;
     DAE.ElementSource source;
     Integer set "Which set this element belongs to.";
+    Absyn.Direction dir "input, output, or not specified"; // FIXME rather encode field into ConnectorType structure?
   end CONNECTOR_ELEMENT;
 end ConnectorElement;
 
