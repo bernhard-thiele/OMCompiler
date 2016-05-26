@@ -218,10 +218,11 @@ protected
   DAE.ComponentRef cref;
   list<DAE.Element> elementLstAcc = {};
 algorithm
-  set_array := ConnectUtil.generateSetArray(inSets);
+  print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: inSets: " + ConnectUtil.printSetsStr(inSets) + "\n");
+
+  set_array := ConnectUtil.generateSetArray(outSets);
   sets := arrayList(set_array);
 
-  //print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: inSets: " + ConnectUtil.printSetsStr(inSets) + "\n");
   //print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: sets:\n");
   //print(stringDelimitList(List.map(sets, ConnectUtil.printSetStr), "\n") + "\n");
 
@@ -274,9 +275,11 @@ algorithm
 
     elementLstAcc := freshMergingEqn :: freshVar :: elementLstAcc;
 
-    // TODO: Need other "otherElems1" corresponding to smOutElemsLst
-    outSets := removeMergedConnectorsByFreshVar(inSets, smOutElemsLst, otherElemsLst, freshVar);
+    // FIXME the idea doesn't really work since the SetTrieNode is really freaky and I
+    // don't manage to substitute the merged connectors by the fresh variable
+    outSets := removeMergedConnectorsByFreshVar(outSets, smOutElemsLst, freshVarRef);
   end for;
+  print("InstStateMachineUtil.mergeConnectionsToMultipleOutputs: outSets: " + ConnectUtil.printSetsStr(outSets) + "\n");
   elementLstAcc := listReverse(elementLstAcc);
 
   // FIXME
@@ -284,31 +287,19 @@ algorithm
 end mergeConnectionsToMultipleOutputs;
 
 
-function removeMergedConnectorsByFreshVar "
+protected function removeMergedConnectorsByFreshVar "
 Author: BTH
 Remove the inSMOutElemsLst elements from the connector set and replace it by a fresh merged variable.
+NO IDEA HOW TO DO THIS
 Helper function to mergeConnectionsToMultipleOutputs.
 "
   input Connect.Sets inSets;
   input list<Connect.ConnectorElement> inSmOutElemsLst;
-  input list<Connect.ConnectorElement> inOtherElemsLst "TODO need the non outputs that are part of the set";
-  input DAE.Element inFreshVar;
-  output Connect.Sets OutSets = inSets;
+  input DAE.ComponentRef inFreshCref;
+  output Connect.Sets outSets = inSets;
 algorithm
 
-TODO
-
-// idea
-map(inSmOutElemsLst, ConnectUtil.addDeletedComponent);
-for x in inOtherElemsLst loop
-  cref := getCref(x);
-  outSets := ConnectUtil.addConnection(inFreshVarCref, cref, bla);
-end for;
-
-
-// ConnectUtil.addDeletedComponent
-// addConnection
-// newElement
+  //TODO
 
 end removeMergedConnectorsByFreshVar;
 

@@ -1509,7 +1509,7 @@ algorithm
   end for;
 end getExpandableEquSetsAsCrefs;
 
-protected function removeCrefsFromSets
+public function removeCrefsFromSets
   input output list<Set> sets;
   input list<DAE.ComponentRef> nonUsefulExpandable;
 algorithm
