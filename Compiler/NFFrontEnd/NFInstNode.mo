@@ -183,6 +183,7 @@ uniontype InstNode
     input InstNode node;
     output Boolean isComponent;
   algorithm
+    print("NFInstNode.isComponent: Entry node=" + name(node) + "\n");
     isComponent := match node
       case COMPONENT_NODE() then true;
       else false;

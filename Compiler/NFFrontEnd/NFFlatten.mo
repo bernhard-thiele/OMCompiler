@@ -60,9 +60,11 @@ import Dimension = NFDimension;
 import Subscript = NFSubscript;
 import Type = NFType;
 import ComponentRef = NFComponentRef;
+import InstStateMachineUtil = NFInstStateMachineUtil;
 
 protected
 import DAEUtil;
+import DAEDump;
 
 public
 partial function ExpandScalarFunc<ElementT>
@@ -79,10 +81,17 @@ protected
   DAE.Element class_elem;
   SourceInfo info = InstNode.info(classInst);
 algorithm
+  print("NFFlatten.flatten: ENTRY. " + InstNode.name(classInst) + "\n");
+
+  //tmpDAElist := DAE.DAE({DAE.COMP(InstNode.name(classInst), elems, DAE.emptyElementSource, NONE())});
+  // print("StateMachineFlatten.stateMachineToDataFlow: tmpDAElist before global subs:\n" + DAEDump.dumpStr(tmpDAElist,FCore.getFunctionTree(cache)));
+
   elems := flattenNode(classInst);
   elems := listReverse(elems);
   class_elem := DAE.COMP(InstNode.name(classInst), elems, ElementSource.createElementSource(info), NONE());
   dae := DAE.DAE({class_elem});
+  // print("NFFlatten.flatten: dae:\n" + DAEDump.dumpStr(dae, FCore.getFunctionTree(FCore.NO_CACHE())));
+  print("NFFlatten.flatten: Exit.  " + InstNode.name(classInst) + "\n");
 end flatten;
 
 function flattenNode
@@ -91,21 +100,30 @@ function flattenNode
   input list<DAE.Element> inElements = {};
   output list<DAE.Element> elements;
 algorithm
+  print("NFFlatten.flattenNode: ENTRY. " + InstNode.name(node) + "\n");
   elements := flattenClass(InstNode.getClass(node), prefix, inElements);
+  print("NFFlatten.flattenNode: EXIT. " + InstNode.name(node) + "\n");
 end flattenNode;
 
 function flattenClass
   input Class instance;
   input ComponentRef prefix;
   input output list<DAE.Element> elements;
+protected
+  InstStateMachineUtil.SMNodeToFlatSMGroupTable smCompToFlatSM;
+  list<DAE.ComponentRef> smCompCrefs "Initial and non-initial states";
+  list<DAE.ComponentRef> smInitialCrefs "Only initial states";
 algorithm
+  print("NFFlatten.flattenClass: ENTRY. prefix: " + Prefix.toString(prefix) + "\n");
   _ := match instance
     case Class.INSTANCED_CLASS()
       algorithm
+
         for c in instance.components loop
           if InstNode.isComponent(c) then
             elements := flattenComponent(c, prefix, elements);
           else
+            print("NFFlatten.flattenClass: THIS HAS BEEN NEVER EXECUTED\n");
             elements := flattenNode(c, prefix, elements);
           end if;
         end for;
@@ -114,6 +132,28 @@ algorithm
         elements := flattenInitialEquations(instance.initialEquations, prefix, elements);
         elements := flattenAlgorithms(instance.algorithms, elements);
         elements := flattenInitialAlgorithms(instance.initialAlgorithms, elements);
+        print("NFFlatten.flattenClass: elements BEFORE SM WRAP:\n" + DAEDump.dumpElementsStr(elements));
+
+        // Below is in Inst.instClassdef2, but seems not needed for NF
+        (smCompCrefs, smInitialCrefs) := InstStateMachineUtil.getSMStatesInContext(elements, prefix);
+        // Below follows in Inst.instClassdef2, but in NF there is no ih, (yet).
+        // ih = List.fold(smCompCrefs, InnerOuter.updateSMHierarchy, ih);
+
+        // BTH: Relate state machine components to the flat state machine that they are part of
+        smCompToFlatSM := InstStateMachineUtil.createSMNodeToFlatSMGroupTable(elements);
+        // BTH: Wrap state machine components (including transition statements) into corresponding flat state machine containers
+        elements := InstStateMachineUtil.wrapSMCompsInFlatSMs(elements, smCompToFlatSM, smInitialCrefs);
+        print("NFFlatten.flattenClass: elements AFTER SM WRAP:\n" + DAEDump.dumpElementsStr(elements));
+
+        // IMPORTANT
+        //Other places in old front-end where state machine stuff is handled:
+        //  Inst.instElement: Here the wrapping into a state is done in the clause "if isInSM then"! This wrapping needs to be done for each SM component before wrapping them into a flat SM using "wrapSMCompsInFlatSMs"
+        //  InstVar.instVar: Handles outer/inner variables, including the state machine special case
+        
+
+        print("NFFlatten.flattenClass: TODO INSERT THINGS from Inst.instClassdef2\n");
+
+
       then
         ();
 
@@ -124,6 +164,7 @@ algorithm
         ();
 
   end match;
+  print("NFFlatten.flattenClass: exit.  prefix: "  + Prefix.toString(prefix) + "\n");
 end flattenClass;
 
 function flattenComponent

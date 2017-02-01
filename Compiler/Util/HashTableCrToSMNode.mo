@@ -28,11 +28,8 @@
  * See the full OSMC Public License conditions for more details.
  *
  */
-encapsulated package HashTableSM1 "
- HashTable instance specific code
-
- DEPRECATED if new frontend is used!
- "
+encapsulated package HashTableCrToSMNode "
+ HashTable instance specific code "
 
 public import BaseHashTable;
 public import DAE;
@@ -40,10 +37,10 @@ protected import ComponentReference;
 protected import HashSet;
 protected import BaseHashSet;
 protected import List;
-protected import InstStateMachineUtil;
+protected import InstStateMachineUtil = NFInstStateMachineUtil;
 
 public type Key = DAE.ComponentRef;
-public type Value = InstStateMachineUtil.SMNode;
+public type Value = NFInstStateMachineUtil.SMNode;
 
 public type HashTableCrefFunctionsType = tuple<FuncHashCref, FuncCrefEqual, FuncCrefStr, FuncExpStr>;
 public type HashTable = tuple<array<list<tuple<Key, Integer>>>,
@@ -110,4 +107,4 @@ algorithm
 end modeStr;
 
 annotation(__OpenModelica_Interface="frontend");
-end HashTableSM1;
+end HashTableCrToSMNode;

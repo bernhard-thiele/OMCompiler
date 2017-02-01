@@ -89,6 +89,7 @@ protected
   InstNode top_comp_node;
   String name;
 algorithm
+  print("NFInst.instClassInProgram: Entry\n");
   execStatReset();
 
   // Create a root node from the given top-level classes.
@@ -115,6 +116,7 @@ algorithm
   // Flatten the class into a DAE.
   dae := Flatten.flatten(inst_cls);
   execStat("NFFlatten.flatten("+ name +")");
+  print("NFInst.instClassInProgram: Exit\n");
 end instClassInProgram;
 
 function instantiate
@@ -122,9 +124,11 @@ function instantiate
   input Modifier modifier = Modifier.NOMOD();
   input InstNode parent = InstNode.EMPTY_NODE();
 algorithm
+  print("NFInst.instantiate: ENTRY. "+ InstNode.name(node) + "\n");
   node := partialInstClass(node);
   node := expandClass(node);
   node := instClass(node, modifier, parent);
+  print("NFInst.instantiate: exit.  " + InstNode.name(node) + "\n");
 end instantiate;
 
 function expand
