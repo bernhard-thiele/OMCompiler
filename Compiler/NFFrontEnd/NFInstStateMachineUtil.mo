@@ -32,7 +32,8 @@
 encapsulated package NFInstStateMachineUtil
 
 import DAE;
-import NFPrefix.Prefix;
+import NFInstPrefix;
+import ComponentRef = NFComponentRef;
 import HashTableCG;
 
 protected import Flags;
@@ -49,6 +50,7 @@ protected import HashSet;
 // protected import Expression;
 // protected import Debug;
 // protected import PrefixUtil;
+protected import NFInstNode.InstNode;
 protected import DAEDump;
 
 public uniontype SMNode
@@ -609,7 +611,7 @@ public function getSMStatesInContext "
 Author: BTH
 Return list of states defined in current context (by checking 'transtion' and 'initialState' operators)"
   input list<DAE.Element> elements;
-  input Prefix prefix;
+  input ComponentRef prefix;
   output list<DAE.ComponentRef> states "Initial and non-initial states";
   output list<DAE.ComponentRef> initialStates "Only initial states";
 protected
@@ -680,6 +682,36 @@ algorithm
   end match;
 end isSMStatement;
 */
+
+//  record COMPONENT_NODE
+//    String name;
+//    SCode.Element definition;
+//    array<Component> component;
+//    InstNode parent;
+//  end COMPONENT_NODE;
+public function isInCrefList
+  input InstNode instNode;
+  input list<DAE.ComponentRef> crefs;
+  output Boolean isInList = false;
+protected
+  String name;
+  DAE.ComponentRef crefIdent;
+  String crefIdentStr;
+algorithm
+  InstNode.COMPONENT_NODE(name=name) := instNode;
+  for cref in crefs loop
+    print("NFInstStateMachineUtil.isInCrefList: BEFORE: " + ComponentReference.crefStr(cref) + "\n");
+    // crefLastCref
+    crefIdent := ComponentReference.crefFirstCref(cref);
+    crefIdentStr := ComponentReference.crefStr(crefIdent);
+    print("NFInstStateMachineUtil.isInCrefList: AFTER: " + crefIdentStr + "\n");
+  end for;
+
+
+
+  //list(2*x*y for x guard x>0 in lst);
+
+end isInCrefList;
 
 annotation(__OpenModelica_Interface="frontend");
 end NFInstStateMachineUtil;

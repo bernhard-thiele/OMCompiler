@@ -759,11 +759,18 @@ external "builtin";
 annotation(version="Modelica 3.3");
 end spatialDistribution;
 
-function previous<T> "Access previous value of a clocked variable"
-  input T u;
-  output T y;
+// BTH 2017-02-14 Uncomment for moment since not working for new frontend
+//function previous<T> "Access previous value of a clocked variable"
+//  input T u;
+//  output T y;
+//  external "builtin";
+//  annotation(__OpenModelica_UnboxArguments=true, version="Modelica 3.3", Documentation(info="<html>
+//  See <a href=\"modelica://ModelicaReference.Operators.'previous()'\">previous()</a>
+//</html>"));
+//end previous;
+function previous "Access previous value of a clocked variable"
   external "builtin";
-  annotation(__OpenModelica_UnboxArguments=true, version="Modelica 3.3", Documentation(info="<html>
+  annotation(Documentation(info="<html>
   See <a href=\"modelica://ModelicaReference.Operators.'previous()'\">previous()</a>
 </html>"));
 end previous;

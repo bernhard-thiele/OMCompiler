@@ -114,11 +114,40 @@ protected
   list<DAE.ComponentRef> smCompCrefs "Initial and non-initial states";
   list<DAE.ComponentRef> smInitialCrefs "Only initial states";
 algorithm
-  print("NFFlatten.flattenClass: ENTRY. prefix: " + Prefix.toString(prefix) + "\n");
+  print("NFFlatten.flattenClass: ENTRY. prefix: " + ComponentRef.toString(prefix) + "\n");
   _ := match instance
     case Class.INSTANCED_CLASS()
       algorithm
 
+        elements := flattenEquations(instance.equations, prefix, elements);
+        elements := flattenInitialEquations(instance.initialEquations, prefix, elements);
+        elements := flattenAlgorithms(instance.algorithms, elements);
+        elements := flattenInitialAlgorithms(instance.initialAlgorithms, elements);
+        print("NFFlatten.flattenClass: elements BEFORE SM WRAP:\n" + DAEDump.dumpElementsStr(elements));
+
+        (smCompCrefs, smInitialCrefs) := InstStateMachineUtil.getSMStatesInContext(elements, prefix);
+
+
+        for c in instance.components loop
+          if InstNode.isComponent(c) and  InstStateMachineUtil.isInCrefList(c, smCompCrefs) then
+            elements := flattenComponent(c, prefix, elements);
+            //elements := wrapInSM(c.name, elements);
+          elseif InstNode.isComponent(c) then
+            elements := flattenComponent(c, prefix, elements);
+          else
+            print("NFFlatten.flattenClass: THIS HAS BEEN NEVER EXECUTED\n");
+            elements := flattenNode(c, prefix, elements);
+          end if;
+        end for;
+
+        // BTH: Relate state machine components to the flat state machine that they are part of
+        smCompToFlatSM := InstStateMachineUtil.createSMNodeToFlatSMGroupTable(elements);
+        // BTH: Wrap state machine components (including transition statements) into corresponding flat state machine containers
+        elements := InstStateMachineUtil.wrapSMCompsInFlatSMs(elements, smCompToFlatSM, smInitialCrefs);
+        print("NFFlatten.flattenClass: elements AFTER SM WRAP:\n" + DAEDump.dumpElementsStr(elements));
+
+
+      /*
         for c in instance.components loop
           if InstNode.isComponent(c) then
             elements := flattenComponent(c, prefix, elements);
@@ -144,6 +173,7 @@ algorithm
         // BTH: Wrap state machine components (including transition statements) into corresponding flat state machine containers
         elements := InstStateMachineUtil.wrapSMCompsInFlatSMs(elements, smCompToFlatSM, smInitialCrefs);
         print("NFFlatten.flattenClass: elements AFTER SM WRAP:\n" + DAEDump.dumpElementsStr(elements));
+      */
 
         // IMPORTANT
         //Other places in old front-end where state machine stuff is handled:
@@ -164,7 +194,7 @@ algorithm
         ();
 
   end match;
-  print("NFFlatten.flattenClass: exit.  prefix: "  + Prefix.toString(prefix) + "\n");
+  print("NFFlatten.flattenClass: exit.  prefix: "  + ComponentRef.toString(prefix) + "\n");
 end flattenClass;
 
 function flattenComponent
